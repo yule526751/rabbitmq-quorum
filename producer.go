@@ -33,7 +33,7 @@ func (r *rabbitMQ) SendToExchange(exchangeName ExchangeName, msg interface{}, ro
 }
 
 // 发送消息到交换机
-func (r *rabbitMQ) SendToExchangeTx(f func(data *models.RabbitmqQuorumMsg) error, exchangeName ExchangeName, msg interface{}, routingKey ...string) (err error) {
+func (r *rabbitMQ) SendToExchangeTx(f func(datum *models.RabbitmqQuorumMsg) error, exchangeName ExchangeName, msg interface{}, routingKey ...string) (err error) {
 	if exchangeName == "" {
 		return errors.New("交换机不能为空")
 	}
@@ -54,6 +54,53 @@ func (r *rabbitMQ) SendToExchangeTx(f func(data *models.RabbitmqQuorumMsg) error
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
 	})
+	if err != nil {
+		return errors.New("创建队列消息记录失败")
+	}
+	return nil
+}
+
+func (r *rabbitMQ) BatchSendToExchangeTx(f func(data []*models.RabbitmqQuorumMsg) error, exchangeName ExchangeName, msgs interface{}, routingKey ...string) (err error) {
+	if exchangeName == "" {
+		return errors.New("交换机不能为空")
+	}
+
+	var rk string
+	if routingKey != nil && len(routingKey) > 0 {
+		rk = routingKey[0]
+	}
+
+	// 检查并转换msgs为切片或数组
+	msgsVal := reflect.ValueOf(msgs)
+	if msgsVal.Kind() == reflect.Ptr {
+		msgsVal = msgsVal.Elem()
+	}
+
+	// 获取元素数量
+	length := msgsVal.Len()
+	var ms = make([]*models.RabbitmqQuorumMsg, 0, length)
+	switch msgsVal.Kind() {
+	case reflect.Slice, reflect.Array:
+		// 断言每个消息类型并转换
+		for i := 0; i < length; i++ {
+			msg := msgsVal.Index(i).Interface()
+			var body []byte
+			body, err = r.convertMsg(msg)
+			if err != nil {
+				return err
+			}
+			ms = append(ms, &models.RabbitmqQuorumMsg{
+				ExchangeName: string(exchangeName),
+				Msg:          body,
+				RoutingKey:   rk,
+				CreatedAt:    time.Now(),
+				UpdatedAt:    time.Now(),
+			})
+		}
+	default:
+		return errors.New("消息类型只支持切片或数组")
+	}
+	err = f(ms)
 	if err != nil {
 		return errors.New("创建队列消息记录失败")
 	}
@@ -192,6 +239,20 @@ func (r *rabbitMQ) convertMsg(msg interface{}) (data []byte, err error) {
 		return nil, errors.New("消息类型只支持结构体和map")
 	}
 	return data, nil
+}
+
+func (r *rabbitMQ) checkMsgsType(msgs interface{}) (reflect.Kind, error) {
+	ref := reflect.TypeOf(msgs)
+	for ref.Kind() == reflect.Ptr {
+		ref = ref.Elem()
+	}
+	if ref.Kind() == reflect.Slice {
+		return reflect.Slice, nil
+	}
+	if ref.Elem().Kind() == reflect.Array {
+		return reflect.Array, nil
+	}
+	return reflect.Invalid, errors.New("消息类型只支持切片或数组")
 }
 
 type sendReq struct {
