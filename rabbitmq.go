@@ -435,3 +435,10 @@ type queue struct {
 	Arguments       struct{}     `json:"arguments"`
 	PropertiesKey   string       `json:"properties_key"`
 }
+
+func (r *rabbitMQ) logPrintf(format string, v ...any) {
+	if !r.openLog {
+		return
+	}
+	log.Printf(format, v...)
+}

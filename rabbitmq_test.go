@@ -15,23 +15,23 @@ import (
 )
 
 var (
-	rabbitmqHost      = "127.0.0.1"
+	rabbitmqHost      = "8.138.91.210"
 	rabbitmqPort      = 5672
-	rabbitmqUser      = "admin"
-	rabbitmqPassword  = "123456"
-	rabbitmqVhost     = "/develop"
+	rabbitmqUser      = "test"
+	rabbitmqPassword  = "testssgf"
+	rabbitmqVhost     = "/test"
 	mysqlHost         = "127.0.0.1"
 	mysqlPort         = "3306"
 	mysqlUsername     = "root"
 	mysqlPassword     = "123456"
-	mysqlDatabase     = ""
+	mysqlDatabase     = "test"
 	mysqlMaxIdleConns = 10
 	mysqlMaxOpenConns = 50
 )
 
 func TestConn(t *testing.T) {
 	m := GetRabbitMQ()
-	err := m.Conn(rabbitmqHost, rabbitmqPort, rabbitmqUser, rabbitmqPassword, "develop")
+	err := m.Conn(rabbitmqHost, rabbitmqPort, rabbitmqUser, rabbitmqPassword, rabbitmqVhost)
 	if err != nil {
 		t.Error(err)
 	}
@@ -213,7 +213,7 @@ func TestBingDelayQueue(t *testing.T) {
 		_ = m.Close()
 	}(m)
 	t.Log("Conn success")
-	m.ExchangeQueueCreate(map[ExchangeName]*Exchange{
+	err = m.ExchangeQueueCreate(map[ExchangeName]*Exchange{
 		"test_exchange1": {
 			BindQueues: map[QueueName]*Queue{
 				"test_queue1": {},
@@ -230,6 +230,9 @@ func TestBingDelayQueue(t *testing.T) {
 			},
 		},
 	})
+	if err != nil {
+		return
+	}
 	if err = m.BindDelayQueueToExchange("test_exchange1", "test_exchange2", 20*time.Second); err != nil {
 		t.Error(err)
 	} else {

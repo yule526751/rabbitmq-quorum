@@ -14,6 +14,7 @@ import (
 
 // 发送消息到交换机
 func (r *rabbitMQ) SendToExchange(exchangeName ExchangeName, msg interface{}, routingKey ...string) (err error) {
+	r.logPrintf("发送消息，交换机：%v，消息：%+v，路由：%+v", exchangeName, msg, routingKey)
 	if exchangeName == "" {
 		return errors.New("交换机不能为空")
 	}
@@ -237,7 +238,7 @@ func (r *rabbitMQ) send(req *sendReq) error {
 	}
 
 	err = ch.Publish(string(req.Exchange), req.RoutingKey, false, false, amqp.Publishing{
-		ContentType:  "text/plain",
+		ContentType:  "application/json",
 		Body:         body,
 		DeliveryMode: 2, // 持久化消息
 	})
