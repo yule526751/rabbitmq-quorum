@@ -91,8 +91,8 @@ func TestSentExchangeTX(t *testing.T) {
 	}
 	initMysql()
 	err = Mysql.Transaction(func(tx *gorm.DB) error {
-		return m.SendToExchangeTx(func(data *models.RabbitmqMsg) error {
-			return tx.Model(&models.RabbitmqMsg{}).Create(data).Error
+		return m.SendToExchangeTx(func(data *models.RabbitmqQuorumMsg) error {
+			return tx.Model(&models.RabbitmqQuorumMsg{}).Create(data).Error
 		}, "test_exchange1", map[string]interface{}{"id": 1})
 	})
 	if err != nil {
@@ -139,8 +139,8 @@ func TestSendDelayQueueTx(t *testing.T) {
 
 	initMysql()
 	err = Mysql.Transaction(func(tx *gorm.DB) error {
-		return m.SendToQueueDelayTx(func(data *models.RabbitmqMsg) error {
-			return tx.Model(&models.RabbitmqMsg{}).Create(data).Error
+		return m.SendToQueueDelayTx(func(data *models.RabbitmqQuorumMsg) error {
+			return tx.Model(&models.RabbitmqQuorumMsg{}).Create(data).Error
 		}, "test_queue1", 10*time.Second, map[string]interface{}{"id": 1})
 	})
 	if err != nil {
@@ -315,8 +315,8 @@ func TestSendToQueueTx(t *testing.T) {
 	t.Log("Conn success")
 	initMysql()
 	err = Mysql.Transaction(func(tx *gorm.DB) error {
-		return m.SendToQueueTx(func(data *models.RabbitmqMsg) error {
-			return tx.Model(&models.RabbitmqMsg{}).Create(data).Error
+		return m.SendToQueueTx(func(data *models.RabbitmqQuorumMsg) error {
+			return tx.Model(&models.RabbitmqQuorumMsg{}).Create(data).Error
 		}, "test_queue1", map[string]interface{}{"id": 1})
 	})
 	if err != nil {

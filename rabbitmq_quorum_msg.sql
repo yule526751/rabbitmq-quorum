@@ -1,4 +1,4 @@
-CREATE TABLE `rabbitmq_msg` (
+CREATE TABLE `rabbitmq_quorum_msg` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `exchange_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '交换机名',
   `queue_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '队列名',
