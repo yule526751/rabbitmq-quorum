@@ -78,7 +78,7 @@ func (r *rabbitMQ) BatchSendToExchangeTx(f func(data []*models.RabbitmqQuorumMsg
 
 	// 获取元素数量
 	length := msgsVal.Len()
-	var ms = make([]*models.RabbitmqQuorumMsg, 0, length)
+	var quorumMsgs = make([]*models.RabbitmqQuorumMsg, 0, length)
 	switch msgsVal.Kind() {
 	case reflect.Slice, reflect.Array:
 		// 断言每个消息类型并转换
@@ -89,7 +89,7 @@ func (r *rabbitMQ) BatchSendToExchangeTx(f func(data []*models.RabbitmqQuorumMsg
 			if err != nil {
 				return err
 			}
-			ms = append(ms, &models.RabbitmqQuorumMsg{
+			quorumMsgs = append(quorumMsgs, &models.RabbitmqQuorumMsg{
 				ExchangeName: string(exchangeName),
 				Msg:          body,
 				RoutingKey:   rk,
@@ -100,7 +100,7 @@ func (r *rabbitMQ) BatchSendToExchangeTx(f func(data []*models.RabbitmqQuorumMsg
 	default:
 		return errors.New("消息类型只支持切片或数组")
 	}
-	err = f(ms)
+	err = f(quorumMsgs)
 	if err != nil {
 		return errors.New("创建队列消息记录失败")
 	}

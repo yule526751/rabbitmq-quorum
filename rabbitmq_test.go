@@ -100,6 +100,38 @@ func TestSentExchangeTX(t *testing.T) {
 	}
 }
 
+func TestBatchSendToExchangeTx(t *testing.T) {
+	m := GetRabbitMQ()
+	err := m.Conn(rabbitmqHost, rabbitmqPort, rabbitmqUser, rabbitmqPassword, rabbitmqVhost)
+	if err != nil {
+		t.Error(err)
+	}
+	defer m.Close()
+	t.Log("Conn success")
+
+	if err = m.ExchangeQueueCreate(map[ExchangeName]*Exchange{
+		"test_exchange1": {
+			BindQueues: map[QueueName]*Queue{
+				"test_queue1": {},
+			},
+		},
+	}); err != nil {
+		t.Error(err)
+	} else {
+		t.Log("ExchangeQueueCreate success")
+	}
+	initMysql()
+	err = Mysql.Transaction(func(tx *gorm.DB) error {
+		return m.BatchSendToExchangeTx(func(data []*models.RabbitmqQuorumMsg) error {
+			tx.Model(&models.RabbitmqQuorumMsg{}).CreateInBatches(&data, 500)
+			return nil
+		}, "test_exchange1", []map[string]interface{}{{"id": 1}})
+	})
+	if err != nil {
+		t.Error(err)
+	}
+}
+
 func TestSendDelayQueue(t *testing.T) {
 	m := GetRabbitMQ()
 	err := m.Conn(rabbitmqHost, rabbitmqPort, rabbitmqUser, rabbitmqPassword, rabbitmqVhost)
