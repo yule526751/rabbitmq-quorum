@@ -60,7 +60,8 @@ func (r *rabbitMQ) SendToExchangeTx(f func(datum *models.RabbitmqQuorumMsg) erro
 	return nil
 }
 
-func (r *rabbitMQ) BatchSendToExchangeTx(f func(data []*models.RabbitmqQuorumMsg) error, exchangeName ExchangeName, msgs interface{}, routingKey ...string) (err error) {
+// 批量发送消息到相同交换机
+func (r *rabbitMQ) BatchSendToSameExchangeTx(f func(data []*models.RabbitmqQuorumMsg) error, exchangeName ExchangeName, msgs interface{}, routingKey ...string) (err error) {
 	if exchangeName == "" {
 		return errors.New("交换机不能为空")
 	}
@@ -101,6 +102,40 @@ func (r *rabbitMQ) BatchSendToExchangeTx(f func(data []*models.RabbitmqQuorumMsg
 		return errors.New("消息类型只支持切片或数组")
 	}
 	err = f(quorumMsgs)
+	if err != nil {
+		return errors.New("创建队列消息记录失败")
+	}
+	return nil
+}
+
+type name struct {
+	models.RabbitmqQuorumMsg
+	exchangeName ExchangeName
+}
+
+func (r *rabbitMQ) BatchSendToDiffExchangeTx(data []*name) (err error) {
+	for i, datum := range data {
+		if datum.ExchangeName == "" {
+			return errors.New("交换机不能为空")
+		}
+	}
+
+	var rk string
+	if routingKey != nil && len(routingKey) > 0 {
+		rk = routingKey[0]
+	}
+	// 断言消息类型
+	body, err := r.convertMsg(msg)
+	if err != nil {
+		return err
+	}
+	err = f(&models.RabbitmqQuorumMsg{
+		ExchangeName: string(exchangeName),
+		Msg:          body,
+		RoutingKey:   rk,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	})
 	if err != nil {
 		return errors.New("创建队列消息记录失败")
 	}

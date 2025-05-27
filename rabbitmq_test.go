@@ -100,7 +100,7 @@ func TestSentExchangeTX(t *testing.T) {
 	}
 }
 
-func TestBatchSendToExchangeTx(t *testing.T) {
+func TestBatchSendToSameExchangeTx(t *testing.T) {
 	m := GetRabbitMQ()
 	err := m.Conn(rabbitmqHost, rabbitmqPort, rabbitmqUser, rabbitmqPassword, rabbitmqVhost)
 	if err != nil {
@@ -122,10 +122,17 @@ func TestBatchSendToExchangeTx(t *testing.T) {
 	}
 	initMysql()
 	err = Mysql.Transaction(func(tx *gorm.DB) error {
-		return m.BatchSendToExchangeTx(func(data []*models.RabbitmqQuorumMsg) error {
+		return m.BatchSendToSameExchangeTx(func(data []*models.RabbitmqQuorumMsg) error {
 			tx.Model(&models.RabbitmqQuorumMsg{}).CreateInBatches(&data, 500)
 			return nil
-		}, "test_exchange1", []map[string]interface{}{{"id": 1}})
+		}, "test_exchange1", []*Queue{
+			{
+				RoutingKey: "123",
+			},
+			{
+				RoutingKey: "456",
+			},
+		})
 	})
 	if err != nil {
 		t.Error(err)
