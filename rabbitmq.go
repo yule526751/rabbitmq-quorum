@@ -62,6 +62,7 @@ var (
 	waitDeleteBindExchangeDelayQueue     = make(map[QueueName]struct{}) // 绑定过交换机的延迟队列
 	waitDeleteBindExchangeDelayQueueLock sync.Mutex
 	defaultManagerPort                   = 15672 // 默认管理端口
+	defaultPort                          = 5672  // 默认端口
 )
 
 func GetRabbitMQ() *rabbitMQ {
@@ -74,6 +75,7 @@ func GetRabbitMQ() *rabbitMQ {
 			queueExchangeMap:      make(map[QueueName]ExchangeName),
 			consumes:              make(map[string]struct{}),
 			managerPort:           defaultManagerPort,
+			port:                  defaultPort,
 			openLog:               true,
 			circulateInterval:     time.Second,
 			maxCirculateSendCount: 200,
@@ -102,6 +104,10 @@ func (r *rabbitMQ) SetMaxCirculateSendCount(n int) {
 
 func (r *rabbitMQ) SetManagerPort(port int) {
 	r.managerPort = port
+}
+
+func (r *rabbitMQ) SetPort(port int) {
+	r.port = port
 }
 
 func (r *rabbitMQ) Conn(host string, port int, user, password, vhost string) (err error) {
