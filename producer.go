@@ -79,7 +79,7 @@ func (r *rabbitMQ) BatchSendToSameExchangeTx(f func(data []*models.RabbitmqQuoru
 
 	// 获取元素数量
 	length := msgsVal.Len()
-	var quorumMsgs = make([]*models.RabbitmqQuorumMsg, 0, length)
+	quorumMsgs := make([]*models.RabbitmqQuorumMsg, 0, length)
 	switch msgsVal.Kind() {
 	case reflect.Slice, reflect.Array:
 		// 断言每个消息类型并转换
@@ -134,7 +134,6 @@ func (r *rabbitMQ) BatchSendToDiffExchangeTx(f func(data []*models.RabbitmqQuoru
 		})
 	}
 	err := f(data)
-
 	if err != nil {
 		return errors.New("创建队列消息记录失败")
 	}
