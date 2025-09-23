@@ -123,7 +123,6 @@ func (r *rabbitMQ) Conn(host string, port int, user, password, vhost string) (er
 }
 
 func (r *rabbitMQ) CirculateSendMsg(ctx context.Context, db *gorm.DB) {
-	// TODO 使用ctx 取消循环
 	for {
 		// 查询消息数量，如果队列为空，则返回
 		var count int64
@@ -175,7 +174,7 @@ func (r *rabbitMQ) reConn() (err error) {
 		}
 		r.conn.NotifyClose(r.notifyClose)
 	}
-	return
+	return err
 }
 
 func (r *rabbitMQ) Close() error {
@@ -222,6 +221,7 @@ func (r *rabbitMQ) ExchangeQueueCreate(declare map[ExchangeName]*Exchange) error
 			case amqp.ExchangeFanout:
 				// 绑定扇出类型不需要路由
 				v.RoutingKey = ""
+			case amqp.ExchangeTopic:
 			default:
 				return errors.New(fmt.Sprintf("未定义的交换机类型%s", exchange.ExchangeType))
 			}
@@ -386,7 +386,7 @@ func (r *rabbitMQ) declareDelayQueue(queueName QueueName, delay time.Duration) (
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("定义延迟队列%s错误", delayQueueName))
 	}
-	return
+	return err
 }
 
 // 获取延迟队列名
@@ -423,6 +423,51 @@ func (r *rabbitMQ) getNeedUnbindDelayQueue(exchangeName ExchangeName) (bindings 
 	return bindings, nil
 }
 
+func (r *rabbitMQ) getQueuesMessageCount(exclude []string) (map[string]int, error) {
+	// 创建基本认证
+	url := fmt.Sprintf("http://%s:%d/api/queues%s", r.host, r.managerPort, r.vhost)
+	req, err := r.buildRequest(url)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		return nil, errors.Wrap(err, "请求获取队列列表接口失败")
+	}
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
+	// 读取响应体
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "读取队列列表接口响应体失败")
+	}
+	// 解析 JSON 响应
+	dlxQueueInfos := make([]*dlxQueueInfo, 0)
+	err = json.Unmarshal(body, &dlxQueueInfos)
+	if err != nil {
+		return nil, errors.Wrap(err, "解析队列列表接口响应体失败")
+	}
+	m := make(map[string]int)
+	for _, v := range dlxQueueInfos {
+		if v.Messages == 0 {
+			continue
+		}
+		var ex bool
+		for _, s := range exclude {
+			if strings.Index(v.Name, s) != -1 {
+				ex = true
+				break
+			}
+		}
+		if ex {
+			continue
+		}
+		m[v.Name] = v.Messages
+	}
+	return m, nil
+}
+
 func (r *rabbitMQ) buildRequest(url string) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
 	if err != nil {
@@ -440,6 +485,11 @@ type queue struct {
 	RoutingKey      string       `json:"routing_key"`
 	Arguments       struct{}     `json:"arguments"`
 	PropertiesKey   string       `json:"properties_key"`
+}
+
+type dlxQueueInfo struct {
+	Messages int    `json:"messages"`
+	Name     string `json:"name"`
 }
 
 func (r *rabbitMQ) logPrintf(format string, v ...any) {

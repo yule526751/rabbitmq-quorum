@@ -135,5 +135,5 @@ func (r *rabbitMQ) done(consumeFunc ConsumeFunc, msg []byte) (isPanic bool, errS
 	if err != nil {
 		errStr = fmt.Sprintf("%+v", err)
 	}
-	return
+	return isPanic, errStr
 }
