@@ -45,13 +45,13 @@ type rabbitMQ struct {
 	queueExchangeMap      map[QueueName]ExchangeName               // 队列绑定到交换机
 	consumesRegisterLock  sync.Mutex
 	consumes              map[string]struct{} // 消费者去重
-	host                  string
+	hosts                 []string
 	port                  int
 	managerPort           int
 	username              string
 	password              string
 	vhost                 string
-	openLog               bool
+	debug                 bool
 	circulateInterval     time.Duration // 循环发送消息间隔，默认1s
 	maxCirculateSendCount int           // 单次循环最大发送数量
 }
@@ -76,7 +76,7 @@ func GetRabbitMQ() *rabbitMQ {
 			consumes:              make(map[string]struct{}),
 			managerPort:           defaultManagerPort,
 			port:                  defaultPort,
-			openLog:               true,
+			debug:                 false,
 			circulateInterval:     time.Second,
 			maxCirculateSendCount: 200,
 		}
@@ -84,8 +84,8 @@ func GetRabbitMQ() *rabbitMQ {
 	return mq
 }
 
-func (r *rabbitMQ) SetDebug(openLog bool) {
-	r.openLog = openLog
+func (r *rabbitMQ) SetDebug(debug bool) {
+	r.debug = debug
 }
 
 func (r *rabbitMQ) SetCirculateInterval(s time.Duration) {
@@ -110,8 +110,8 @@ func (r *rabbitMQ) SetPort(port int) {
 	r.port = port
 }
 
-func (r *rabbitMQ) Conn(host string, port int, user, password, vhost string) (err error) {
-	r.host = host
+func (r *rabbitMQ) Conn(hosts []string, port int, user, password, vhost string) (err error) {
+	r.hosts = hosts
 	r.port = port
 	r.username = user
 	r.password = password
@@ -327,6 +327,18 @@ func (r *rabbitMQ) UnbindDelayQueueFromExchange(fromExchangeName, toExchangeName
 	return nil
 }
 
+// 获取队列长度
+func (r *rabbitMQ) GetQueuesLength(exclude []string) (map[string]int, error) {
+	ch, err := r.conn.Channel()
+	if err != nil {
+		return nil, errors.Wrap(err, "获取通道失败")
+	}
+	defer func(ch *amqp.Channel) {
+		_ = ch.Close()
+	}(ch)
+	return r.getQueuesMessageCount(exclude)
+}
+
 // 生成死信队列名
 func (r *rabbitMQ) generateDlxQueueName(qn QueueName) QueueName {
 	return QueueName(fmt.Sprintf("%s_dlx", qn))
@@ -493,7 +505,7 @@ type dlxQueueInfo struct {
 }
 
 func (r *rabbitMQ) logPrintf(format string, v ...any) {
-	if !r.openLog {
+	if !r.debug {
 		return
 	}
 	log.Printf(format, v...)

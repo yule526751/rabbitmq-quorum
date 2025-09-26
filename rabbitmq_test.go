@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	rabbitmqHost      = "8.138.91.210"
+	rabbitmqHost      = "8.138.90.89"
 	rabbitmqPort      = 5672
 	rabbitmqUser      = "test"
 	rabbitmqPassword  = "testssgf"

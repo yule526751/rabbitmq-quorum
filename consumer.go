@@ -26,7 +26,7 @@ func (r *rabbitMQ) RegisterConsumer(consumerName string, consumer *Consumer) err
 	r.consumesRegisterLock.Lock()
 	defer r.consumesRegisterLock.Unlock()
 	r.consumes[consumerName] = struct{}{}
-	if r.openLog {
+	if r.debug {
 		log.Printf("consumer %s register success\n", consumerName)
 	}
 	return r.consumerRun(consumerName, consumer)
@@ -52,7 +52,7 @@ func (r *rabbitMQ) consumerRun(consumerName string, consumer *Consumer) error {
 	// handle 处理逻辑
 	go r.handle(ch, consumer, msgChan)
 
-	if r.openLog {
+	if r.debug {
 		log.Printf("consumer %s listen queue %s run....\n", consumerName, consumer.QueueName)
 	}
 	return nil
@@ -67,7 +67,7 @@ func (r *rabbitMQ) handle(ch *amqp.Channel, consumer *Consumer, msgChan <-chan a
 			// 解析json，添加错误信息和错误时间
 			err := json.Unmarshal(msg.Body, &m)
 			if err != nil {
-				if r.openLog {
+				if r.debug {
 					log.Printf("parse json error: %+v", err)
 				}
 				continue
@@ -79,7 +79,7 @@ func (r *rabbitMQ) handle(ch *amqp.Channel, consumer *Consumer, msgChan <-chan a
 			// 发送到死信队列
 			body, err := json.Marshal(m)
 			if err != nil {
-				if r.openLog {
+				if r.debug {
 					log.Printf("parse json error: %+v", err)
 				}
 				continue
@@ -87,7 +87,7 @@ func (r *rabbitMQ) handle(ch *amqp.Channel, consumer *Consumer, msgChan <-chan a
 			dlxQueueName := r.generateDlxQueueName(consumer.QueueName)
 			err = ch.Publish("", string(dlxQueueName), false, false, amqp.Publishing{ContentType: "text/plain", Body: body})
 			if err != nil {
-				if r.openLog {
+				if r.debug {
 					log.Printf("send %s error: %+v", dlxQueueName, err)
 				}
 			}
@@ -97,14 +97,14 @@ func (r *rabbitMQ) handle(ch *amqp.Channel, consumer *Consumer, msgChan <-chan a
 			if r.conn.IsClosed() {
 				err := r.reConn()
 				if err != nil {
-					if r.openLog {
+					if r.debug {
 						log.Printf("重连rabbitmq失败：%+v", err)
 					}
 					continue
 				}
 				ch, err = r.conn.Channel()
 				if err != nil {
-					if r.openLog {
+					if r.debug {
 						log.Printf("获取信道失败：%+v", err)
 					}
 
@@ -113,7 +113,7 @@ func (r *rabbitMQ) handle(ch *amqp.Channel, consumer *Consumer, msgChan <-chan a
 			}
 			err := ch.Ack(msg.DeliveryTag, false)
 			if err != nil {
-				if r.openLog {
+				if r.debug {
 					log.Printf("ack error: %+v", err)
 				}
 			} else {
