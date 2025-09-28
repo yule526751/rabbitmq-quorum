@@ -15,10 +15,10 @@ import (
 )
 
 var (
-	rabbitmqHost      = "8.138.90.89"
+	rabbitmqHost      = []string{}
 	rabbitmqPort      = 5672
 	rabbitmqUser      = "test"
-	rabbitmqPassword  = "testssgf"
+	rabbitmqPassword  = ""
 	rabbitmqVhost     = "/test"
 	mysqlHost         = "127.0.0.1"
 	mysqlPort         = "3306"
@@ -28,6 +28,14 @@ var (
 	mysqlMaxIdleConns = 10
 	mysqlMaxOpenConns = 50
 )
+
+func TestGetHost(t *testing.T) {
+	m := GetRabbitMQ()
+	m.hosts = rabbitmqHost
+	for i := 0; i < 10; i++ {
+		t.Log(m.getRandomHost())
+	}
+}
 
 func TestConn(t *testing.T) {
 	m := GetRabbitMQ()

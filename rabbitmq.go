@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"strings"
 	"sync"
@@ -24,11 +25,13 @@ type (
 )
 
 // 队列
+
 type Queue struct {
 	RoutingKey string // 路由键
 }
 
 // 交换机
+
 type Exchange struct {
 	ExchangeType string // 交换机类型
 	// 交换机绑定的队列列表，如果有延迟时间，则生成 队列名_(秒)s_transfer，
@@ -161,13 +164,18 @@ func (r *rabbitMQ) CirculateSendMsg(ctx context.Context, db *gorm.DB) {
 				log.Printf("mq循环发送消息失败:%v", err)
 			}
 		}
-		time.Sleep(r.circulateInterval)
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			time.Sleep(r.circulateInterval)
+		}
 	}
 }
 
 func (r *rabbitMQ) reConn() (err error) {
 	if r.conn == nil || r.conn.IsClosed() {
-		url := fmt.Sprintf("amqp://%s:%s@%s:%d%s", r.username, r.password, r.host, r.port, r.vhost)
+		url := fmt.Sprintf("amqp://%s:%s@%s:%d%s", r.username, r.password, r.getRandomHost(), r.port, r.vhost)
 		r.conn, err = amqp.Dial(url)
 		if err != nil {
 			return errors.Wrap(err, "连接RabbitMQ失败")
@@ -175,6 +183,10 @@ func (r *rabbitMQ) reConn() (err error) {
 		r.conn.NotifyClose(r.notifyClose)
 	}
 	return err
+}
+
+func (r *rabbitMQ) getRandomHost() string {
+	return r.hosts[rand.Intn(len(r.hosts))]
 }
 
 func (r *rabbitMQ) Close() error {
@@ -409,7 +421,7 @@ func (r *rabbitMQ) getDelayQueueName(queue QueueName, delay time.Duration) Queue
 
 func (r *rabbitMQ) getNeedUnbindDelayQueue(exchangeName ExchangeName) (bindings []*queue, err error) {
 	// 创建基本认证
-	url := fmt.Sprintf("http://%s:%d/api/exchanges%s/%s/bindings/source", r.host, r.managerPort, r.vhost, exchangeName)
+	url := fmt.Sprintf("http://%s:%d/api/exchanges%s/%s/bindings/source", r.getRandomHost(), r.managerPort, r.vhost, exchangeName)
 	req, err := r.buildRequest(url)
 	if err != nil {
 		return nil, err
@@ -437,7 +449,7 @@ func (r *rabbitMQ) getNeedUnbindDelayQueue(exchangeName ExchangeName) (bindings 
 
 func (r *rabbitMQ) getQueuesMessageCount(exclude []string) (map[string]int, error) {
 	// 创建基本认证
-	url := fmt.Sprintf("http://%s:%d/api/queues%s", r.host, r.managerPort, r.vhost)
+	url := fmt.Sprintf("http://%s:%d/api/queues%s", r.getRandomHost(), r.managerPort, r.vhost)
 	req, err := r.buildRequest(url)
 	if err != nil {
 		return nil, err
