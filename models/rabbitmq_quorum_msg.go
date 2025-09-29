@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-type RabbitmqQuorumMsg struct {
+type RabbitmqMsg struct {
 	ID           uint       `gorm:"primarykey" json:"id"`
 	ExchangeName string     `gorm:"column:exchange_name" json:"exchange_name"` // 交换机名称
 	QueueName    string     `gorm:"column:queue_name" json:"queue_name"`       // 队列名称

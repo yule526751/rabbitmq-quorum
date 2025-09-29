@@ -129,7 +129,7 @@ func (r *rabbitMQ) CirculateSendMsg(ctx context.Context, db *gorm.DB) {
 	for {
 		// 查询消息数量，如果队列为空，则返回
 		var count int64
-		db.Model(&models.RabbitmqQuorumMsg{}).Count(&count)
+		db.Model(&models.RabbitmqMsg{}).Count(&count)
 
 		if count == 0 {
 			select {
@@ -151,8 +151,8 @@ func (r *rabbitMQ) CirculateSendMsg(ctx context.Context, db *gorm.DB) {
 		// 开启事务，查询数据，发送消息后删除数据
 		for i := 0; i < loopCount; i++ {
 			err := db.Transaction(func(tx *gorm.DB) error {
-				var msg *models.RabbitmqQuorumMsg
-				err := tx.Model(&models.RabbitmqQuorumMsg{}).Clauses(clause.Locking{Strength: "UPDATE"}).Order("id asc").First(&msg).Error
+				var msg *models.RabbitmqMsg
+				err := tx.Model(&models.RabbitmqMsg{}).Clauses(clause.Locking{Strength: "UPDATE"}).Order("id asc").First(&msg).Error
 				if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 					return err
 				}
@@ -166,7 +166,7 @@ func (r *rabbitMQ) CirculateSendMsg(ctx context.Context, db *gorm.DB) {
 				if err != nil {
 					return err
 				}
-				return tx.Unscoped().Delete(&models.RabbitmqQuorumMsg{}, msg.ID).Error
+				return tx.Unscoped().Delete(&models.RabbitmqMsg{}, msg.ID).Error
 			})
 			if err != nil {
 				log.Printf("mq循环发送消息失败:%v", err)

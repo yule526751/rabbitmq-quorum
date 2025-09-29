@@ -33,7 +33,7 @@ func (r *rabbitMQ) SendToExchange(exchangeName ExchangeName, msg interface{}, ro
 }
 
 // 发送消息到交换机
-func (r *rabbitMQ) SendToExchangeTx(f func(datum *models.RabbitmqQuorumMsg) error, exchangeName ExchangeName, msg interface{}, routingKey ...string) (err error) {
+func (r *rabbitMQ) SendToExchangeTx(f func(datum *models.RabbitmqMsg) error, exchangeName ExchangeName, msg interface{}, routingKey ...string) (err error) {
 	if exchangeName == "" {
 		return errors.New("交换机不能为空")
 	}
@@ -47,7 +47,7 @@ func (r *rabbitMQ) SendToExchangeTx(f func(datum *models.RabbitmqQuorumMsg) erro
 	if err != nil {
 		return err
 	}
-	err = f(&models.RabbitmqQuorumMsg{
+	err = f(&models.RabbitmqMsg{
 		ExchangeName: string(exchangeName),
 		Msg:          body,
 		RoutingKey:   rk,
@@ -61,7 +61,7 @@ func (r *rabbitMQ) SendToExchangeTx(f func(datum *models.RabbitmqQuorumMsg) erro
 }
 
 // 批量发送消息到相同交换机
-func (r *rabbitMQ) BatchSendToSameExchangeTx(f func(data []*models.RabbitmqQuorumMsg) error, exchangeName ExchangeName, msgs interface{}, routingKey ...string) (err error) {
+func (r *rabbitMQ) BatchSendToSameExchangeTx(f func(data []*models.RabbitmqMsg) error, exchangeName ExchangeName, msgs interface{}, routingKey ...string) (err error) {
 	if exchangeName == "" {
 		return errors.New("交换机不能为空")
 	}
@@ -79,7 +79,7 @@ func (r *rabbitMQ) BatchSendToSameExchangeTx(f func(data []*models.RabbitmqQuoru
 
 	// 获取元素数量
 	length := msgsVal.Len()
-	quorumMsgs := make([]*models.RabbitmqQuorumMsg, 0, length)
+	quorumMsgs := make([]*models.RabbitmqMsg, 0, length)
 	switch msgsVal.Kind() {
 	case reflect.Slice, reflect.Array:
 		// 断言每个消息类型并转换
@@ -90,7 +90,7 @@ func (r *rabbitMQ) BatchSendToSameExchangeTx(f func(data []*models.RabbitmqQuoru
 			if err != nil {
 				return err
 			}
-			quorumMsgs = append(quorumMsgs, &models.RabbitmqQuorumMsg{
+			quorumMsgs = append(quorumMsgs, &models.RabbitmqMsg{
 				ExchangeName: string(exchangeName),
 				Msg:          body,
 				RoutingKey:   rk,
@@ -114,8 +114,8 @@ type DiffMsg struct {
 	RoutingKey   string
 }
 
-func (r *rabbitMQ) BatchSendToDiffExchangeTx(f func(data []*models.RabbitmqQuorumMsg) error, msgs []*DiffMsg) error {
-	var data []*models.RabbitmqQuorumMsg
+func (r *rabbitMQ) BatchSendToDiffExchangeTx(f func(data []*models.RabbitmqMsg) error, msgs []*DiffMsg) error {
+	var data []*models.RabbitmqMsg
 	for _, datum := range msgs {
 		if datum.ExchangeName == "" {
 			return errors.New("交换机不能为空")
@@ -125,7 +125,7 @@ func (r *rabbitMQ) BatchSendToDiffExchangeTx(f func(data []*models.RabbitmqQuoru
 		if err != nil {
 			return err
 		}
-		data = append(data, &models.RabbitmqQuorumMsg{
+		data = append(data, &models.RabbitmqMsg{
 			ExchangeName: string(datum.ExchangeName),
 			Msg:          body,
 			RoutingKey:   datum.RoutingKey,
@@ -154,7 +154,7 @@ func (r *rabbitMQ) SendToQueue(queueName QueueName, msg interface{}) error {
 }
 
 // 发送消息到指定队列，不是交换机
-func (r *rabbitMQ) SendToQueueTx(f func(data *models.RabbitmqQuorumMsg) error, queueName QueueName, msg interface{}) error {
+func (r *rabbitMQ) SendToQueueTx(f func(data *models.RabbitmqMsg) error, queueName QueueName, msg interface{}) error {
 	// 检查参数
 	if queueName == "" {
 		return errors.New("队列不能为空")
@@ -164,7 +164,7 @@ func (r *rabbitMQ) SendToQueueTx(f func(data *models.RabbitmqQuorumMsg) error, q
 	if err != nil {
 		return err
 	}
-	err = f(&models.RabbitmqQuorumMsg{
+	err = f(&models.RabbitmqMsg{
 		Msg:        body,
 		RoutingKey: string(queueName),
 		CreatedAt:  time.Now(),
@@ -209,7 +209,7 @@ func (r *rabbitMQ) SendToQueueDelay(queueName QueueName, delay time.Duration, ms
 }
 
 // 发送延迟消息到指定队列，不是交换机
-func (r *rabbitMQ) SendToQueueDelayTx(f func(data *models.RabbitmqQuorumMsg) error, queueName QueueName, delay time.Duration, msg interface{}) error {
+func (r *rabbitMQ) SendToQueueDelayTx(f func(data *models.RabbitmqMsg) error, queueName QueueName, delay time.Duration, msg interface{}) error {
 	// 检查参数
 	if queueName == "" {
 		return errors.New("队列不能为空")
@@ -237,7 +237,7 @@ func (r *rabbitMQ) SendToQueueDelayTx(f func(data *models.RabbitmqQuorumMsg) err
 	}
 
 	d := decimal.NewFromInt(int64(delay)).Div(decimal.NewFromInt(int64(time.Second))).IntPart()
-	err = f(&models.RabbitmqQuorumMsg{
+	err = f(&models.RabbitmqMsg{
 		QueueName: string(queueName),
 		Msg:       body,
 		Delay:     uint64(d),
