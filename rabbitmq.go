@@ -130,18 +130,10 @@ func (r *rabbitMQ) CirculateSendMsg(ctx context.Context, db *gorm.DB) {
 		// 查询消息数量，如果队列为空，则返回
 		var count int64
 		db.Model(&models.RabbitmqMsg{}).Count(&count)
-
 		if count == 0 {
-			select {
-			case <-ctx.Done():
-				r.logPrintf("mq循环发送消息已取消")
-				return
-			case <-time.After(r.circulateInterval):
-				r.logPrintf("mq循环发送消息休眠结束")
-				continue
-			}
+			time.Sleep(r.circulateInterval)
+			continue
 		}
-
 		var loopCount int
 		if count > 200 {
 			loopCount = 200
@@ -172,6 +164,7 @@ func (r *rabbitMQ) CirculateSendMsg(ctx context.Context, db *gorm.DB) {
 				log.Printf("mq循环发送消息失败:%v", err)
 			}
 		}
+		time.Sleep(r.circulateInterval)
 	}
 }
 
