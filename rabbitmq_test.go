@@ -3,6 +3,7 @@ package mq
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/yule526751/rabbitmq-quorum/models"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 	"gorm.io/gorm/schema"
 )
@@ -104,7 +106,7 @@ func TestSentExchangeTX(t *testing.T) {
 	err = Mysql.Transaction(func(tx *gorm.DB) error {
 		return m.SendToExchangeTx(func(data *models.RabbitmqMsg) error {
 			return tx.Model(&models.RabbitmqMsg{}).Create(data).Error
-		}, "test_exchange1", map[string]interface{}{"id": 1})
+		}, "consume_limit_ex", map[string]interface{}{"id": 1})
 	})
 	if err != nil {
 		t.Error(err)
@@ -137,7 +139,7 @@ func TestBatchSendToSameExchangeTx(t *testing.T) {
 		return m.BatchSendToSameExchangeTx(func(data []*models.RabbitmqMsg) error {
 			tx.Model(&models.RabbitmqMsg{}).CreateInBatches(&data, 500)
 			return nil
-		}, "test_exchange1", []*Queue{
+		}, "consume_limit_ex", []*Queue{
 			{
 				RoutingKey: "123",
 			},
@@ -232,7 +234,7 @@ func TestSendDelayQueueTx(t *testing.T) {
 	err = Mysql.Transaction(func(tx *gorm.DB) error {
 		return m.SendToQueueDelayTx(func(data *models.RabbitmqMsg) error {
 			return tx.Model(&models.RabbitmqMsg{}).Create(data).Error
-		}, "test_queue1", 10*time.Second, map[string]interface{}{"id": 1})
+		}, "consume_limit_queue1", 10*time.Second, map[string]interface{}{"id": 1})
 	})
 	if err != nil {
 		t.Error(err)
@@ -516,4 +518,113 @@ func initMysql() {
 	db.SetConnMaxIdleTime(2 * time.Minute)
 	db.SetMaxIdleConns(mysqlMaxIdleConns)
 	db.SetMaxOpenConns(mysqlMaxOpenConns)
+}
+
+// ********************** 测试消费限制，每个队里的同一个messageId只能被消费1次 **********************
+
+func TestConsumeLimit(t *testing.T) {
+	m := GetRabbitMQ()
+	m.SetDebug(true)
+	err := m.Conn(rabbitmqHost, rabbitmqPort, rabbitmqUser, rabbitmqPassword, rabbitmqVhost)
+	if err != nil {
+		t.Error(err)
+	}
+	defer func(m *rabbitMQ) {
+		_ = m.Close()
+	}(m)
+	initMysql()
+	m.ExchangeQueueCreate(map[ExchangeName]*Exchange{
+		"consume_limit_ex": {
+			BindQueues: map[QueueName]*Queue{
+				"consume_limit_queue1": {},
+				"consume_limit_queue2": {},
+				"consume_limit_queue3": {},
+			},
+		},
+	})
+	m.RegisterConsumer("consume_limit_queue1", &Consumer{
+		QueueName: "consume_limit_queue1",
+		ConsumeFunc: func(msg []byte) error {
+			type t struct {
+				Id int `json:"id"`
+			}
+			var tmp t
+			err = json.Unmarshal(msg, &tmp)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("consume_limit_queue1消费了消息:%s\n", string(msg))
+			return nil
+		},
+		RecordFunc: checkRecord,
+	})
+	m.RegisterConsumer("consume_limit_queue2", &Consumer{
+		QueueName: "consume_limit_queue2",
+		ConsumeFunc: func(msg []byte) error {
+			type t struct {
+				Id int `json:"id"`
+			}
+			var tmp t
+			err = json.Unmarshal(msg, &tmp)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("consume_limit_queue2消费了消息:%s", string(msg))
+			return nil
+		},
+		RecordFunc: checkRecord,
+	})
+	m.RegisterConsumer("consume_limit_queue3", &Consumer{
+		QueueName: "consume_limit_queue3",
+		ConsumeFunc: func(msg []byte) error {
+			type t struct {
+				Id int `json:"id"`
+			}
+			var tmp t
+			err = json.Unmarshal(msg, &tmp)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("consume_limit_queue3消费了消息:%s", string(msg))
+			return nil
+		},
+		RecordFunc: checkRecord,
+	})
+
+	//go func() {
+	//	for {
+	//		select {
+	//		case <-time.After(time.Second * 5):
+	//			_ = Mysql.Transaction(func(tx *gorm.DB) error {
+	//				return m.SendToExchangeTx(func(data *models.RabbitmqMsg) error {
+	//					return tx.Model(&models.RabbitmqMsg{}).Create(data).Error
+	//				}, "consume_limit_ex", map[string]interface{}{"id": 1})
+	//			})
+	//		}
+	//	}
+	//}()
+	select {}
+}
+
+func checkRecord(msgId string, queueName QueueName, msg []byte) (hasRecord bool, err error) {
+	err = Mysql.Transaction(func(tx *gorm.DB) error {
+		// 查找是否有记录
+		var count int64
+		err = tx.Model(&models.RabbitmqConsumeRecord{}).Clauses(clause.Locking{Strength: "UPDATE"}).Where("message_id = ? AND queue_name = ?", msgId, queueName).Count(&count).Error
+		if err != nil {
+			return err
+		}
+		hasRecord = count > 0
+		if count > 0 {
+			return nil
+		} else {
+			err = tx.Model(&models.RabbitmqConsumeRecord{}).Create(&models.RabbitmqConsumeRecord{
+				MessageID: msgId,
+				QueueName: string(queueName),
+				Msg:       msg,
+			}).Error
+			return err
+		}
+	})
+	return
 }

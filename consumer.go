@@ -3,7 +3,6 @@ package mq
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/pkg/errors"
@@ -12,7 +11,7 @@ import (
 
 type ConsumeFunc func(msg []byte) error
 
-type RecordFunc func(msgId string, queueName QueueName) (hasRecord bool, errStr string)
+type RecordFunc func(msgId string, queueName QueueName, msg []byte) (hasRecord bool, err error)
 
 type Consumer struct {
 	QueueName   QueueName   // 队列名称
@@ -29,9 +28,7 @@ func (r *rabbitMQ) RegisterConsumer(consumerName string, consumer *Consumer) err
 	r.consumesRegisterLock.Lock()
 	defer r.consumesRegisterLock.Unlock()
 	r.consumes[consumerName] = struct{}{}
-	if r.debug {
-		log.Printf("consumer %s register success\n", consumerName)
-	}
+	r.logPrintf("consumer %s register success\n", consumerName)
 	return r.consumerRun(consumerName, consumer)
 }
 
@@ -55,81 +52,64 @@ func (r *rabbitMQ) consumerRun(consumerName string, consumer *Consumer) error {
 	// handle 处理逻辑
 	go r.handle(ch, consumer, msgChan)
 
-	if r.debug {
-		log.Printf("consumer %s listen queue %s run....\n", consumerName, consumer.QueueName)
-	}
+	r.logPrintf("consumer %s listen queue %s success", consumerName, consumer.QueueName)
 	return nil
 }
 
 // handle 处理逻辑
 func (r *rabbitMQ) handle(ch *amqp.Channel, consumer *Consumer, msgChan <-chan amqp.Delivery) {
 	for msg := range msgChan {
-		hasRecord, errStr := consumer.RecordFunc(msg.MessageId, consumer.QueueName)
-		if errStr != "" {
-			if r.debug {
-				log.Printf("记录消费记录失败：MessageId:%s,错误:%s", msg.MessageId, errStr)
-			}
-			continue
+		hasRecord, err := consumer.RecordFunc(msg.MessageId, consumer.QueueName, msg.Body)
+		if err != nil {
+			r.logPrintf("记录消费记录失败：MessageId:%s,错误:%s", msg.MessageId, err)
 		}
-		if hasRecord {
-			log.Printf("消息已处理过，MessageId:%s,错误:%s", msg.MessageId, errStr)
-			continue
-		}
-		_, errStr = r.done(consumer.ConsumeFunc, msg.Body)
-		if errStr != "" {
-			m := make(map[string]interface{})
-			// 解析json，添加错误信息和错误时间
-			err := json.Unmarshal(msg.Body, &m)
-			if err != nil {
-				if r.debug {
-					log.Printf("parse json error: %+v", err)
+		if !hasRecord {
+			_, errStr := r.done(consumer.ConsumeFunc, msg.Body)
+			if errStr != "" {
+				m := make(map[string]interface{})
+				// 解析json，添加错误信息和错误时间
+				err = json.Unmarshal(msg.Body, &m)
+				if err != nil {
+					r.logPrintf("parse json error: %+v", err)
+					continue
 				}
-				continue
-			}
-			// 添加错误和时间
-			m["dlx_err"] = errStr
-			m["dlx_at"] = time.Now().Local().Format(time.DateTime)
+				// 添加错误和时间
+				m["dlx_err"] = errStr
+				m["dlx_at"] = time.Now().Local().Format(time.DateTime)
 
-			// 发送到死信队列
-			body, err := json.Marshal(m)
-			if err != nil {
-				if r.debug {
-					log.Printf("parse json error: %+v", err)
+				// 发送到死信队列
+				body, err := json.Marshal(m)
+				if err != nil {
+					r.logPrintf("parse json error: %+v", err)
+					continue
 				}
-				continue
-			}
-			dlxQueueName := r.generateDlxQueueName(consumer.QueueName)
-			err = ch.Publish("", string(dlxQueueName), false, false, amqp.Publishing{ContentType: "text/plain", Body: body})
-			if err != nil {
-				if r.debug {
-					log.Printf("send %s error: %+v", dlxQueueName, err)
+				dlxQueueName := r.generateDlxQueueName(consumer.QueueName)
+				err = ch.Publish("", string(dlxQueueName), false, false, amqp.Publishing{ContentType: "text/plain", Body: body})
+				if err != nil {
+					r.logPrintf("send %s error: %+v", dlxQueueName, err)
 				}
 			}
+		} else {
+			r.logPrintf("消息已处理过，MessageId:%s", msg.MessageId)
 		}
 
 		for i := 0; i < r.ackRetryTime; i++ {
 			if r.conn.IsClosed() {
-				err := r.reConn()
+				err = r.reConn()
 				if err != nil {
-					if r.debug {
-						log.Printf("重连rabbitmq失败：%+v", err)
-					}
+					r.logPrintf("重连rabbitmq失败：%+v", err)
 					continue
 				}
 				ch, err = r.conn.Channel()
 				if err != nil {
-					if r.debug {
-						log.Printf("获取信道失败：%+v", err)
-					}
+					r.logPrintf("获取信道失败：%+v", err)
 
 					continue
 				}
 			}
-			err := ch.Ack(msg.DeliveryTag, false)
+			err = ch.Ack(msg.DeliveryTag, false)
 			if err != nil {
-				if r.debug {
-					log.Printf("ack error: %+v", err)
-				}
+				r.logPrintf("ack error: %+v", err)
 			} else {
 				break
 			}
