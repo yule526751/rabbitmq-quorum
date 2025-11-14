@@ -123,8 +123,10 @@ func (r *rabbitMQ) CirculateSendMsg(ctx context.Context, db *gorm.DB) error {
 	if count == 0 {
 		return nil
 	}
+	r.logPrintf("查询到消息数量为%d", count)
 	var loopCount int
 	if count > 200 {
+		r.logPrintf("消息数量大于200，限制为200个，开始循环发送")
 		loopCount = 200
 	} else {
 		loopCount = int(count)
@@ -140,6 +142,7 @@ func (r *rabbitMQ) CirculateSendMsg(ctx context.Context, db *gorm.DB) error {
 			if msg == nil {
 				return nil
 			}
+			r.logPrintf("查询到mq消息为：%+v", msg)
 			err = r.send(&sendReq{
 				Exchange:   ExchangeName(msg.ExchangeName),
 				Queue:      QueueName(msg.QueueName),
@@ -148,9 +151,17 @@ func (r *rabbitMQ) CirculateSendMsg(ctx context.Context, db *gorm.DB) error {
 				Delay:      time.Duration(msg.Delay) * time.Second,
 			})
 			if err != nil {
+				r.logPrintf("发送消息失败,%+v,err = %v", msg, err)
 				return err
 			}
-			return tx.Unscoped().Delete(&models.RabbitmqMsg{}, msg.ID).Error
+			r.logPrintf("发送消息成功,%+v", msg)
+			err = tx.Unscoped().Delete(&models.RabbitmqMsg{}, msg.ID).Error
+			if err != nil {
+				r.logPrintf("删除消息失败,%+v,err = %v", msg, err)
+				return err
+			}
+			r.logPrintf("删除消息成功,%+v", msg)
+			return nil
 		})
 		if err != nil {
 			return err
