@@ -116,12 +116,12 @@ func (r *rabbitMQ) Conn(hosts []string, port int, user, password, vhost string) 
 	return r.reConn()
 }
 
-func (r *rabbitMQ) CirculateSendMsg(ctx context.Context, db *gorm.DB) {
+func (r *rabbitMQ) CirculateSendMsg(ctx context.Context, db *gorm.DB) error {
 	// 查询消息数量，如果队列为空，则返回
 	var count int64
 	db.Model(&models.RabbitmqMsg{}).Count(&count)
 	if count == 0 {
-		return
+		return nil
 	}
 	var loopCount int
 	if count > 200 {
@@ -153,9 +153,10 @@ func (r *rabbitMQ) CirculateSendMsg(ctx context.Context, db *gorm.DB) {
 			return tx.Unscoped().Delete(&models.RabbitmqMsg{}, msg.ID).Error
 		})
 		if err != nil {
-			log.Printf("mq循环发送消息失败:%v", err)
+			return err
 		}
 	}
+	return nil
 }
 
 func (r *rabbitMQ) reConn() (err error) {
