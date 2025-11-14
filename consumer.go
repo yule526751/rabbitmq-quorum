@@ -20,6 +20,15 @@ type Consumer struct {
 }
 
 func (r *rabbitMQ) RegisterConsumer(consumerName string, consumer *Consumer) error {
+	if consumer == nil {
+		return errors.New("消费者不能为空")
+	}
+	if consumer.ConsumeFunc == nil {
+		return errors.New("消费者函数不能为空")
+	}
+	if consumer.RecordFunc == nil {
+		return errors.New("消费者记录函数不能为空")
+	}
 	_, ok := r.consumes[consumerName]
 	if ok {
 		return errors.New(fmt.Sprintf("消费者 %s 已存在，注册失败", consumerName))
