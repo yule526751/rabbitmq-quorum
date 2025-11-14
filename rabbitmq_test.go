@@ -11,7 +11,6 @@ import (
 	"github.com/yule526751/rabbitmq-quorum/models"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 	"gorm.io/gorm/schema"
 )
@@ -546,7 +545,7 @@ func TestConsumeLimit(t *testing.T) {
 		QueueName: "consume_limit_queue1",
 		ConsumeFunc: func(msg []byte) error {
 			type t struct {
-				Id int `json:"id"`
+				Id string `json:"id"`
 			}
 			var tmp t
 			err = json.Unmarshal(msg, &tmp)
@@ -562,14 +561,14 @@ func TestConsumeLimit(t *testing.T) {
 		QueueName: "consume_limit_queue2",
 		ConsumeFunc: func(msg []byte) error {
 			type t struct {
-				Id int `json:"id"`
+				Id string `json:"id"`
 			}
 			var tmp t
 			err = json.Unmarshal(msg, &tmp)
 			if err != nil {
 				return err
 			}
-			fmt.Printf("consume_limit_queue2消费了消息:%s", string(msg))
+			fmt.Printf("consume_limit_queue2消费了消息:%s\n", string(msg))
 			return nil
 		},
 		RecordFunc: checkRecord,
@@ -578,39 +577,43 @@ func TestConsumeLimit(t *testing.T) {
 		QueueName: "consume_limit_queue3",
 		ConsumeFunc: func(msg []byte) error {
 			type t struct {
-				Id int `json:"id"`
+				Id string `json:"id"`
 			}
 			var tmp t
 			err = json.Unmarshal(msg, &tmp)
 			if err != nil {
 				return err
 			}
-			fmt.Printf("consume_limit_queue3消费了消息:%s", string(msg))
+			fmt.Printf("consume_limit_queue3消费了消息:%s\n", string(msg))
 			return nil
 		},
 		RecordFunc: checkRecord,
 	})
 
-	//go func() {
-	//	for {
-	//		select {
-	//		case <-time.After(time.Second * 5):
-	//			_ = Mysql.Transaction(func(tx *gorm.DB) error {
-	//				return m.SendToExchangeTx(func(data *models.RabbitmqMsg) error {
-	//					return tx.Model(&models.RabbitmqMsg{}).Create(data).Error
-	//				}, "consume_limit_ex", map[string]interface{}{"id": 1})
-	//			})
-	//		}
-	//	}
-	//}()
+	go func() {
+		for {
+			select {
+			case <-time.After(time.Second * 3):
+				_ = Mysql.Transaction(func(tx *gorm.DB) error {
+					return m.SendToExchangeTx(func(data *models.RabbitmqMsg) error {
+						return tx.Model(&models.RabbitmqMsg{}).Create(data).Error
+					}, "consume_limit_ex", map[string]interface{}{"id": time.Now().Format(time.DateTime)})
+				})
+			}
+		}
+	}()
 	select {}
 }
 
 func checkRecord(msgId string, queueName QueueName, msg []byte) (hasRecord bool, err error) {
 	err = Mysql.Transaction(func(tx *gorm.DB) error {
 		// 查找是否有记录
+		if msgId == "" {
+			return nil
+		}
 		var count int64
-		err = tx.Model(&models.RabbitmqConsumeRecord{}).Clauses(clause.Locking{Strength: "UPDATE"}).Where("message_id = ? AND queue_name = ?", msgId, queueName).Count(&count).Error
+		// 这里不能用for update，多个队列同时消费会死锁
+		err = tx.Model(&models.RabbitmqConsumeRecord{}).Where("message_id = ? AND queue_name = ?", msgId, queueName).Count(&count).Error
 		if err != nil {
 			return err
 		}
