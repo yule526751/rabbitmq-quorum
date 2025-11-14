@@ -56,7 +56,8 @@ type rabbitMQ struct {
 	password              string
 	vhost                 string
 	debug                 bool
-	maxCirculateSendCount int // 单次循环最大发送数量
+	maxCirculateSendCount int    // 单次循环最大发送数量
+	AppId                 string // 应用id，例如8100,8103
 }
 
 var (
@@ -105,6 +106,10 @@ func (r *rabbitMQ) SetPort(port int) {
 	r.port = port
 }
 
+func (r *rabbitMQ) SetAppId(appId string) {
+	r.AppId = appId
+}
+
 func (r *rabbitMQ) Conn(hosts []string, port int, user, password, vhost string) (err error) {
 	r.hosts = hosts
 	r.port = port
@@ -151,6 +156,7 @@ func (r *rabbitMQ) CirculateSendMsg(ctx context.Context, db *gorm.DB) error {
 				Msg:        msg.Msg,
 				Delay:      time.Duration(msg.Delay) * time.Second,
 				MessageID:  strconv.Itoa(int(msg.ID)),
+				AppId:      msg.AppId,
 			})
 			if err != nil {
 				r.logPrintf("发送消息失败，重试计数+1，%+v，err = %v", msg, err)

@@ -53,6 +53,7 @@ func (r *rabbitMQ) SendToExchangeTx(f func(datum *models.RabbitmqMsg) error, exc
 		RoutingKey:   rk,
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
+		AppId:        r.AppId,
 	})
 	if err != nil {
 		return errors.New("创建队列消息记录失败")
@@ -96,6 +97,7 @@ func (r *rabbitMQ) BatchSendToSameExchangeTx(f func(data []*models.RabbitmqMsg) 
 				RoutingKey:   rk,
 				CreatedAt:    time.Now(),
 				UpdatedAt:    time.Now(),
+				AppId:        r.AppId,
 			})
 		}
 	default:
@@ -131,6 +133,7 @@ func (r *rabbitMQ) BatchSendToDiffExchangeTx(f func(data []*models.RabbitmqMsg) 
 			RoutingKey:   datum.RoutingKey,
 			CreatedAt:    time.Now(),
 			UpdatedAt:    time.Now(),
+			AppId:        r.AppId,
 		})
 	}
 	err := f(data)
@@ -169,6 +172,7 @@ func (r *rabbitMQ) SendToQueueTx(f func(data *models.RabbitmqMsg) error, queueNa
 		RoutingKey: string(queueName),
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
+		AppId:      r.AppId,
 	})
 	if err != nil {
 		return errors.New("创建队列消息记录失败")
@@ -243,6 +247,7 @@ func (r *rabbitMQ) SendToQueueDelayTx(f func(data *models.RabbitmqMsg) error, qu
 		Delay:     uint64(d),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
+		AppId:     r.AppId,
 	})
 	if err != nil {
 		return errors.New("创建队列消息记录失败")
@@ -295,6 +300,7 @@ type sendReq struct {
 	Msg        interface{}   // 数据
 	Delay      time.Duration // 延迟时间
 	MessageID  string        // 消息ID
+	AppId      string        // 应用id
 }
 
 // 发送消息
@@ -337,6 +343,8 @@ func (r *rabbitMQ) send(req *sendReq) error {
 		Body:         body,
 		DeliveryMode: 2, // 持久化消息
 		MessageId:    req.MessageID,
+		Timestamp:    time.Now(),
+		AppId:        req.AppId,
 	})
 	if err != nil {
 		_ = ch.TxRollback()

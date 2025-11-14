@@ -82,6 +82,7 @@ func TestSendExchange(t *testing.T) {
 func TestSentExchangeTX(t *testing.T) {
 	m := GetRabbitMQ()
 	err := m.Conn(rabbitmqHost, rabbitmqPort, rabbitmqUser, rabbitmqPassword, rabbitmqVhost)
+	m.SetAppId("100")
 	if err != nil {
 		t.Error(err)
 	}
@@ -113,6 +114,7 @@ func TestSentExchangeTX(t *testing.T) {
 func TestBatchSendToSameExchangeTx(t *testing.T) {
 	m := GetRabbitMQ()
 	err := m.Conn(rabbitmqHost, rabbitmqPort, rabbitmqUser, rabbitmqPassword, rabbitmqVhost)
+	m.SetAppId("100")
 	if err != nil {
 		t.Error(err)
 	}
@@ -151,6 +153,7 @@ func TestBatchSendToSameExchangeTx(t *testing.T) {
 
 func TestBatchSendToDiffExchangeTx(t *testing.T) {
 	m := GetRabbitMQ()
+	m.SetAppId("100")
 	err := m.Conn(rabbitmqHost, rabbitmqPort, rabbitmqUser, rabbitmqPassword, rabbitmqVhost)
 	if err != nil {
 		t.Error(err)
@@ -217,6 +220,7 @@ func TestSendDelayQueue(t *testing.T) {
 
 func TestSendDelayQueueTx(t *testing.T) {
 	m := GetRabbitMQ()
+	m.SetAppId("100")
 	err := m.Conn(rabbitmqHost, rabbitmqPort, rabbitmqUser, rabbitmqPassword, rabbitmqVhost)
 	if err != nil {
 		t.Error(err)
@@ -433,6 +437,7 @@ func TestSendToQueue(t *testing.T) {
 
 func TestSendToQueueTx(t *testing.T) {
 	m := GetRabbitMQ()
+	m.SetAppId("100")
 	err := m.Conn(rabbitmqHost, rabbitmqPort, rabbitmqUser, rabbitmqPassword, rabbitmqVhost)
 	if err != nil {
 		t.Error(err)

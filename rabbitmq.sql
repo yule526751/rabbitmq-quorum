@@ -6,6 +6,7 @@ CREATE TABLE `rabbitmq_msg` (
     `msg` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci COMMENT '消息',
     `delay` bigint unsigned DEFAULT NULL COMMENT '延迟时间，秒',
     `retry_count` int unsigned NOT NULL DEFAULT '0' COMMENT '重试次数',
+    `app_id` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '发消息的应用id，用端口，例如8100',
     `created_at` datetime NOT NULL,
     `updated_at` datetime NOT NULL,
     `deleted_at` datetime DEFAULT NULL,
