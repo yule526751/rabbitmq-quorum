@@ -283,6 +283,47 @@ func TestConsumer(t *testing.T) {
 	select {}
 }
 
+func TestMoreConsumer(t *testing.T) {
+	m := GetRabbitMQ()
+	err := m.Conn(rabbitmqHost, rabbitmqPort, rabbitmqUser, rabbitmqPassword, rabbitmqVhost)
+	if err != nil {
+		t.Error(err)
+	}
+	defer func(m *rabbitMQ) {
+		_ = m.Close()
+	}(m)
+	t.Log("Conn success")
+
+	if err = m.ExchangeQueueCreate(map[ExchangeName]*Exchange{
+		"test_exchange1": {
+			BindQueues: map[QueueName]*Queue{
+				"test_queue1": {},
+			},
+		},
+	}); err != nil {
+		t.Error(err)
+	} else {
+		t.Log("ExchangeQueueCreate success")
+	}
+
+	go func() {
+		select {
+		case err = <-m.notifyClose:
+			t.Log(err, 1231241241)
+			if m.conn.IsClosed() {
+				_ = m.reConn()
+			}
+		}
+	}()
+	go func() {
+		_ = m.RegisterConsumer("test_consumer1", &Consumer{
+			QueueName:   "test_queue1",
+			ConsumeFunc: handle,
+		})
+	}()
+	select {}
+}
+
 func handle(data []byte) error {
 	fmt.Println(string(data), time.Now())
 	return nil

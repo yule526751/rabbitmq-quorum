@@ -55,8 +55,7 @@ type rabbitMQ struct {
 	password              string
 	vhost                 string
 	debug                 bool
-	circulateInterval     time.Duration // 循环发送消息间隔，默认1s
-	maxCirculateSendCount int           // 单次循环最大发送数量
+	maxCirculateSendCount int // 单次循环最大发送数量
 }
 
 var (
@@ -80,7 +79,6 @@ func GetRabbitMQ() *rabbitMQ {
 			managerPort:           defaultManagerPort,
 			port:                  defaultPort,
 			debug:                 false,
-			circulateInterval:     time.Second,
 			maxCirculateSendCount: 200,
 		}
 	})
@@ -89,13 +87,6 @@ func GetRabbitMQ() *rabbitMQ {
 
 func (r *rabbitMQ) SetDebug(debug bool) {
 	r.debug = debug
-}
-
-func (r *rabbitMQ) SetCirculateInterval(s time.Duration) {
-	if s <= time.Millisecond*10 {
-		s = time.Millisecond * 10
-	}
-	r.circulateInterval = s
 }
 
 func (r *rabbitMQ) SetMaxCirculateSendCount(n int) {
@@ -126,45 +117,44 @@ func (r *rabbitMQ) Conn(hosts []string, port int, user, password, vhost string) 
 }
 
 func (r *rabbitMQ) CirculateSendMsg(ctx context.Context, db *gorm.DB) {
-	for {
-		// 查询消息数量，如果队列为空，则返回
-		var count int64
-		db.Model(&models.RabbitmqMsg{}).Count(&count)
-		if count == 0 {
-			time.Sleep(r.circulateInterval)
-			continue
-		}
-		var loopCount int
-		if count > 200 {
-			loopCount = 200
-		} else {
-			loopCount = int(count)
-		}
-		// 开启事务，查询数据，发送消息后删除数据
-		for i := 0; i < loopCount; i++ {
-			err := db.Transaction(func(tx *gorm.DB) error {
-				var msg *models.RabbitmqMsg
-				err := tx.Model(&models.RabbitmqMsg{}).Clauses(clause.Locking{Strength: "UPDATE"}).Order("id asc").First(&msg).Error
-				if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-					return err
-				}
-				err = r.send(&sendReq{
-					Exchange:   ExchangeName(msg.ExchangeName),
-					Queue:      QueueName(msg.QueueName),
-					RoutingKey: msg.RoutingKey,
-					Msg:        msg.Msg,
-					Delay:      time.Duration(msg.Delay) * time.Second,
-				})
-				if err != nil {
-					return err
-				}
-				return tx.Unscoped().Delete(&models.RabbitmqMsg{}, msg.ID).Error
+	// 查询消息数量，如果队列为空，则返回
+	var count int64
+	db.Model(&models.RabbitmqMsg{}).Count(&count)
+	if count == 0 {
+		return
+	}
+	var loopCount int
+	if count > 200 {
+		loopCount = 200
+	} else {
+		loopCount = int(count)
+	}
+	// 开启事务，查询数据，发送消息后删除数据
+	for i := 0; i < loopCount; i++ {
+		err := db.Transaction(func(tx *gorm.DB) error {
+			var msg *models.RabbitmqMsg
+			err := tx.Model(&models.RabbitmqMsg{}).Clauses(clause.Locking{Strength: "UPDATE"}).Order("id asc").First(&msg).Error
+			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			if msg == nil {
+				return nil
+			}
+			err = r.send(&sendReq{
+				Exchange:   ExchangeName(msg.ExchangeName),
+				Queue:      QueueName(msg.QueueName),
+				RoutingKey: msg.RoutingKey,
+				Msg:        msg.Msg,
+				Delay:      time.Duration(msg.Delay) * time.Second,
 			})
 			if err != nil {
-				log.Printf("mq循环发送消息失败:%v", err)
+				return err
 			}
+			return tx.Unscoped().Delete(&models.RabbitmqMsg{}, msg.ID).Error
+		})
+		if err != nil {
+			log.Printf("mq循环发送消息失败:%v", err)
 		}
-		time.Sleep(r.circulateInterval)
 	}
 }
 
