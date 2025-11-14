@@ -136,7 +136,7 @@ func (r *rabbitMQ) CirculateSendMsg(ctx context.Context, db *gorm.DB) error {
 	for i := 0; i < loopCount; i++ {
 		err := db.Transaction(func(tx *gorm.DB) error {
 			var msg *models.RabbitmqMsg
-			err := tx.Model(&models.RabbitmqMsg{}).Clauses(clause.Locking{Strength: "UPDATE"}).Last(&msg).Error
+			err := tx.Model(&models.RabbitmqMsg{}).Clauses(clause.Locking{Strength: "UPDATE"}).Order("retry_count ASC").First(&msg).Error
 			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 				return err
 			}
@@ -153,16 +153,18 @@ func (r *rabbitMQ) CirculateSendMsg(ctx context.Context, db *gorm.DB) error {
 				MessageID:  strconv.Itoa(int(msg.ID)),
 			})
 			if err != nil {
-				r.logPrintf("发送消息失败,%+v,err = %v", msg, err)
-				return err
+				r.logPrintf("发送消息失败，重试计数+1，%+v，err = %v", msg, err)
+				tx.Model(&models.RabbitmqMsg{}).Where("id = ?", msg.ID).Update("retry_count", gorm.Expr("retry_count + ?", 1))
+				return nil
+			} else {
+				r.logPrintf("发送消息成功，%+v", msg)
+				err = tx.Delete(&models.RabbitmqMsg{}, msg.ID).Error
+				if err != nil {
+					r.logPrintf("删除消息失败，%+v，err = %v", msg, err)
+					return err
+				}
+				r.logPrintf("删除消息成功,%+v", msg)
 			}
-			r.logPrintf("发送消息成功,%+v", msg)
-			err = tx.Delete(&models.RabbitmqMsg{}, msg.ID).Error
-			if err != nil {
-				r.logPrintf("删除消息失败,%+v,err = %v", msg, err)
-				return err
-			}
-			r.logPrintf("删除消息成功,%+v", msg)
 			return nil
 		})
 		if err != nil {

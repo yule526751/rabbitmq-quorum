@@ -15,10 +15,12 @@ import (
 )
 
 var (
-	rabbitmqHost      = []string{}
-	rabbitmqPort      = 5672
-	rabbitmqUser      = "test"
-	rabbitmqPassword  = ""
+	rabbitmqHost = []string{
+		"localhost",
+	}
+	rabbitmqPort      = 45672
+	rabbitmqUser      = "admin"
+	rabbitmqPassword  = "123456"
 	rabbitmqVhost     = "/test"
 	mysqlHost         = "127.0.0.1"
 	mysqlPort         = "3306"
@@ -453,7 +455,7 @@ func TestSendToQueueTx(t *testing.T) {
 
 func TestCirculateSendMsg(t *testing.T) {
 	m := GetRabbitMQ()
-	err := m.Conn(rabbitmqHost, rabbitmqPort, rabbitmqUser, rabbitmqPassword, rabbitmqVhost)
+	err := GetRabbitMQ().Conn(rabbitmqHost, rabbitmqPort, rabbitmqUser, rabbitmqPassword, rabbitmqVhost)
 	if err != nil {
 		t.Error(err)
 	}
@@ -461,8 +463,13 @@ func TestCirculateSendMsg(t *testing.T) {
 		_ = m.Close()
 	}(m)
 	t.Log("Conn success")
+	m.SetDebug(true)
 	initMysql()
-	m.CirculateSendMsg(context.Background(), Mysql)
+	for {
+		m.CirculateSendMsg(context.Background(), Mysql)
+		time.Sleep(time.Millisecond * 500)
+		fmt.Println(time.Now())
+	}
 }
 
 var Mysql *gorm.DB
