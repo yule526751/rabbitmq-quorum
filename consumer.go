@@ -12,9 +12,12 @@ import (
 
 type ConsumeFunc func(msg []byte) error
 
+type RecordFunc func(msgId string, queueName QueueName) (hasRecord bool, errStr string)
+
 type Consumer struct {
 	QueueName   QueueName   // 队列名称
 	ConsumeFunc ConsumeFunc // 消费函数
+	RecordFunc  RecordFunc  // 记录消费记录
 }
 
 func (r *rabbitMQ) RegisterConsumer(consumerName string, consumer *Consumer) error {
@@ -61,7 +64,18 @@ func (r *rabbitMQ) consumerRun(consumerName string, consumer *Consumer) error {
 // handle 处理逻辑
 func (r *rabbitMQ) handle(ch *amqp.Channel, consumer *Consumer, msgChan <-chan amqp.Delivery) {
 	for msg := range msgChan {
-		_, errStr := r.done(consumer.ConsumeFunc, msg.Body)
+		hasRecord, errStr := consumer.RecordFunc(msg.MessageId, consumer.QueueName)
+		if errStr != "" {
+			if r.debug {
+				log.Printf("记录消费记录失败：MessageId:%s,错误:%s", msg.MessageId, errStr)
+			}
+			continue
+		}
+		if hasRecord {
+			log.Printf("消息已处理过，MessageId:%s,错误:%s", msg.MessageId, errStr)
+			continue
+		}
+		_, errStr = r.done(consumer.ConsumeFunc, msg.Body)
 		if errStr != "" {
 			m := make(map[string]interface{})
 			// 解析json，添加错误信息和错误时间

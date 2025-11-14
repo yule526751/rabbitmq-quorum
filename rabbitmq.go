@@ -8,6 +8,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -135,7 +136,7 @@ func (r *rabbitMQ) CirculateSendMsg(ctx context.Context, db *gorm.DB) error {
 	for i := 0; i < loopCount; i++ {
 		err := db.Transaction(func(tx *gorm.DB) error {
 			var msg *models.RabbitmqMsg
-			err := tx.Model(&models.RabbitmqMsg{}).Clauses(clause.Locking{Strength: "UPDATE"}).Order("id asc").First(&msg).Error
+			err := tx.Model(&models.RabbitmqMsg{}).Clauses(clause.Locking{Strength: "UPDATE"}).Last(&msg).Error
 			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 				return err
 			}
@@ -149,13 +150,14 @@ func (r *rabbitMQ) CirculateSendMsg(ctx context.Context, db *gorm.DB) error {
 				RoutingKey: msg.RoutingKey,
 				Msg:        msg.Msg,
 				Delay:      time.Duration(msg.Delay) * time.Second,
+				MessageID:  strconv.Itoa(int(msg.ID)),
 			})
 			if err != nil {
 				r.logPrintf("发送消息失败,%+v,err = %v", msg, err)
 				return err
 			}
 			r.logPrintf("发送消息成功,%+v", msg)
-			err = tx.Unscoped().Delete(&models.RabbitmqMsg{}, msg.ID).Error
+			err = tx.Delete(&models.RabbitmqMsg{}, msg.ID).Error
 			if err != nil {
 				r.logPrintf("删除消息失败,%+v,err = %v", msg, err)
 				return err
