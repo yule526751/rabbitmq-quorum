@@ -140,7 +140,7 @@ func (r *rabbitMQ) CirculateSendMsg(ctx context.Context, db *gorm.DB) error {
 			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 				return err
 			}
-			if msg == nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) || msg == nil || msg.ID == 0 {
 				return nil
 			}
 			r.logPrintf("查询到mq消息为：%+v", msg)
