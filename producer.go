@@ -294,6 +294,8 @@ type sendReq struct {
 	RoutingKey string        // 路由
 	Msg        interface{}   // 数据
 	Delay      time.Duration // 延迟时间
+	MessageID  string        // 消息ID
+	AppId      string        // 应用id
 }
 
 // 发送消息
@@ -335,6 +337,9 @@ func (r *rabbitMQ) send(req *sendReq) error {
 		ContentType:  "application/json",
 		Body:         body,
 		DeliveryMode: 2, // 持久化消息
+		MessageId:    req.MessageID,
+		Timestamp:    time.Now(),
+		AppId:        req.AppId,
 	})
 	if err != nil {
 		_ = ch.TxRollback()
