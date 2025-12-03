@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rabbitmq/amqp091-go"
+
 	"github.com/yule526751/rabbitmq-quorum/models"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -71,6 +73,51 @@ func TestSendExchange(t *testing.T) {
 	if err = m.SendToExchange("test_exchange1", map[string]interface{}{
 		"id": 1,
 	}); err != nil {
+		t.Error(err)
+	} else {
+		t.Log("SendToExchange success")
+	}
+}
+
+func TestSendTopicExchange(t *testing.T) {
+	m := GetRabbitMQ()
+	err := m.Conn(rabbitmqHost, rabbitmqPort, rabbitmqUser, rabbitmqPassword, rabbitmqVhost)
+	if err != nil {
+		t.Error(err)
+	}
+	defer m.Close()
+	t.Log("Conn success")
+
+	if err = m.ExchangeQueueCreate(map[ExchangeName]*Exchange{
+		"order_ex": {
+			ExchangeType: amqp091.ExchangeTopic,
+			BindQueues: map[QueueName]*Queue{
+				"order_create": {
+					RoutingKey: "order.create.#",
+				},
+				"order_create_success": {
+					RoutingKey: "order.create.success",
+				},
+				"order_create_offline_success": {
+					RoutingKey: "order.create.offline.success",
+				},
+				"order_create_offline_fail": {
+					RoutingKey: "order.create.offline.fail",
+				},
+				"order_create_fail": {
+					RoutingKey: "order.create.fail",
+				},
+			},
+		},
+	}); err != nil {
+		t.Error(err)
+	} else {
+		t.Log("ExchangeQueueCreate success")
+	}
+
+	if err = m.SendToExchange("order_ex", map[string]interface{}{
+		"id": 1,
+	}, "order.create"); err != nil {
 		t.Error(err)
 	} else {
 		t.Log("SendToExchange success")
@@ -370,6 +417,64 @@ func TestBingDelayQueue(t *testing.T) {
 		t.Log("BindDelayQueueToExchange success")
 	}
 	if err = m.BindDelayQueueToExchange("test_exchange2", "test_exchange3", 40*time.Second); err != nil {
+		t.Error(err)
+	} else {
+		t.Log("BindDelayQueueToExchange success")
+	}
+}
+
+func TestBingTopicDelayQueue(t *testing.T) {
+	m := GetRabbitMQ()
+	err := m.Conn(rabbitmqHost, rabbitmqPort, rabbitmqUser, rabbitmqPassword, rabbitmqVhost)
+	if err != nil {
+		t.Error(err)
+	}
+	defer func(m *rabbitMQ) {
+		_ = m.Close()
+	}(m)
+	t.Log("Conn success")
+	err = m.ExchangeQueueCreate(map[ExchangeName]*Exchange{
+		"product_ex": {
+			ExchangeType: amqp091.ExchangeTopic,
+			BindQueues: map[QueueName]*Queue{
+				"product_change": {
+					RoutingKey: "product.#",
+				},
+				"product_add": {
+					RoutingKey: "product.add",
+				},
+				"product_delete": {
+					RoutingKey: "product.delete",
+				},
+			},
+		},
+		"inventory_ex": {
+			ExchangeType: amqp091.ExchangeTopic,
+			BindQueues: map[QueueName]*Queue{
+				"inventory_change": {
+					RoutingKey: "inventory.#",
+				},
+				"inventory_add": {
+					RoutingKey: "inventory.add",
+				},
+				"inventory_add_new": {
+					RoutingKey: "inventory.add2",
+				},
+				"inventory_delete": {
+					RoutingKey: "inventory.delete",
+				},
+			},
+		},
+	})
+	if err != nil {
+		return
+	}
+	if err = m.BindDelayQueueToTopicExchange("product_ex", "product.add.#", "inventory_ex", "inventory.add2", 20*time.Second); err != nil {
+		t.Error(err)
+	} else {
+		t.Log("BindDelayQueueToExchange success")
+	}
+	if err = m.BindDelayQueueToTopicExchange("product_ex", "product.add.#", "inventory_ex", "inventory.add2", 30*time.Second); err != nil {
 		t.Error(err)
 	} else {
 		t.Log("BindDelayQueueToExchange success")

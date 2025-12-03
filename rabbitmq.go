@@ -23,12 +23,13 @@ import (
 type (
 	ExchangeName string
 	QueueName    string
+	RoutingKey   string
 )
 
 // 队列
 
 type Queue struct {
-	RoutingKey string // 路由键
+	RoutingKey RoutingKey // 路由键
 }
 
 // 交换机
@@ -236,12 +237,15 @@ func (r *rabbitMQ) ExchangeQueueCreate(declare map[ExchangeName]*Exchange) error
 				// 绑定扇出类型不需要路由
 				v.RoutingKey = ""
 			case amqp.ExchangeTopic:
+				if v.RoutingKey == "" {
+					return errors.New(fmt.Sprintf("交换机%s类型为Topic，请指定路由", exchangeName))
+				}
 			default:
 				return errors.New(fmt.Sprintf("未定义的交换机类型%s", exchange.ExchangeType))
 			}
 
 			// 绑定路由
-			err = ch.QueueBind(string(queueName), v.RoutingKey, string(exchangeName), false, nil)
+			err = ch.QueueBind(string(queueName), string(v.RoutingKey), string(exchangeName), false, nil)
 			if err != nil {
 				return errors.Wrap(err, fmt.Sprintf("队列%s绑定交换机%s失败", queueName, exchangeName))
 			}
@@ -297,6 +301,52 @@ func (r *rabbitMQ) BindDelayQueueToExchange(fromExchangeName, toExchangeName Exc
 		if index == 0 {
 			// 延迟队列名前缀相同，则解绑
 			err = ch.QueueUnbind(string(binding.Destination), "", string(binding.Source), nil)
+			if err != nil {
+				return errors.Wrap(err, fmt.Sprintf("解绑交换机%s的队列%s失败", binding.Source, binding.Destination))
+			}
+			waitDeleteBindExchangeDelayQueueLock.Lock()
+			waitDeleteBindExchangeDelayQueue[binding.Destination] = struct{}{}
+			waitDeleteBindExchangeDelayQueueLock.Unlock()
+		}
+	}
+
+	return nil
+}
+
+func (r *rabbitMQ) BindDelayQueueToTopicExchange(fromExchangeName ExchangeName, fromRoutingKey RoutingKey, toExchangeName ExchangeName, toRoutingKey RoutingKey, delay time.Duration) error {
+	topicExchangeDelayQueueName := r.getBindExchangeDelayQueueName(toExchangeName, delay)
+	err := r.declareBindTopicExchangeDelayQueue(toExchangeName, topicExchangeDelayQueueName, toRoutingKey, delay)
+	if err != nil {
+		return err
+	}
+
+	ch, err := r.conn.Channel()
+	if err != nil {
+		return errors.Wrap(err, "获取通道失败")
+	}
+	defer func(ch *amqp.Channel) {
+		_ = ch.Close()
+	}(ch)
+	// 绑定路由
+	err = ch.QueueBind(string(topicExchangeDelayQueueName), string(fromRoutingKey), string(fromExchangeName), false, nil)
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("队列%s，路由%s，绑定交换机%s失败", topicExchangeDelayQueueName, fromRoutingKey, fromExchangeName))
+	}
+
+	var bindings []*queue
+	bindings, err = r.getNeedUnbindDelayQueue(fromExchangeName)
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("获取交换机%s需要解绑的延迟队列失败", fromExchangeName))
+	}
+	for _, binding := range bindings {
+		if binding.Destination == topicExchangeDelayQueueName {
+			// 延迟队列名相同，则跳过
+			continue
+		}
+		index := strings.Index(string(binding.Destination), string(toExchangeName))
+		if index == 0 {
+			// 延迟队列名前缀相同，则解绑
+			err = ch.QueueUnbind(string(binding.Destination), string(fromRoutingKey), string(binding.Source), nil)
 			if err != nil {
 				return errors.Wrap(err, fmt.Sprintf("解绑交换机%s的队列%s失败", binding.Source, binding.Destination))
 			}
@@ -382,6 +432,30 @@ func (r *rabbitMQ) declareBindExchangeDelayQueue(exchangeName ExchangeName, queu
 		amqp.QueueMessageTTLArg:     ttl, // 消息过期时间，毫秒
 		"x-dead-letter-exchange":    string(exchangeName),
 		"x-dead-letter-routing-key": "",
+		amqp.QueueTypeArg:           amqp.QueueTypeQuorum,
+	})
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("定义延迟队列%s错误", queueName))
+	}
+	return nil
+}
+
+// 定义绑定到主体交换机的延迟队列
+func (r *rabbitMQ) declareBindTopicExchangeDelayQueue(exchangeName ExchangeName, queueName QueueName, routingKey RoutingKey, delay time.Duration) error {
+	ch, err := r.conn.Channel()
+	if err != nil {
+		return errors.Wrap(err, "获取通道失败")
+	}
+	defer func(ch *amqp.Channel) {
+		_ = ch.Close()
+	}(ch)
+
+	ttl := int64(delay / time.Millisecond)
+
+	_, err = ch.QueueDeclare(string(queueName), true, false, false, false, amqp.Table{
+		amqp.QueueMessageTTLArg:     ttl, // 消息过期时间，毫秒
+		"x-dead-letter-exchange":    string(exchangeName),
+		"x-dead-letter-routing-key": string(routingKey),
 		amqp.QueueTypeArg:           amqp.QueueTypeQuorum,
 	})
 	if err != nil {
