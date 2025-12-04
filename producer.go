@@ -13,7 +13,7 @@ import (
 )
 
 // 发送消息到交换机
-func (r *rabbitMQ) SendToExchange(exchangeName ExchangeName, msg interface{}, routingKey ...string) (err error) {
+func (r *RabbitMQ) SendToExchange(exchangeName ExchangeName, msg interface{}, routingKey ...string) (err error) {
 	r.logPrintf("发送消息，交换机：%v，消息：%+v，路由：%+v", exchangeName, msg, routingKey)
 	if exchangeName == "" {
 		return errors.New("交换机不能为空")
@@ -33,7 +33,7 @@ func (r *rabbitMQ) SendToExchange(exchangeName ExchangeName, msg interface{}, ro
 }
 
 // 发送消息到交换机
-func (r *rabbitMQ) SendToExchangeTx(f func(datum *models.RabbitmqMsg) error, exchangeName ExchangeName, msg interface{}, routingKey ...string) (err error) {
+func (r *RabbitMQ) SendToExchangeTx(f func(datum *models.RabbitmqMsg) error, exchangeName ExchangeName, msg interface{}, routingKey ...string) (err error) {
 	if exchangeName == "" {
 		return errors.New("交换机不能为空")
 	}
@@ -61,7 +61,7 @@ func (r *rabbitMQ) SendToExchangeTx(f func(datum *models.RabbitmqMsg) error, exc
 }
 
 // 批量发送消息到相同交换机
-func (r *rabbitMQ) BatchSendToSameExchangeTx(f func(data []*models.RabbitmqMsg) error, exchangeName ExchangeName, msgs interface{}, routingKey ...string) (err error) {
+func (r *RabbitMQ) BatchSendToSameExchangeTx(f func(data []*models.RabbitmqMsg) error, exchangeName ExchangeName, msgs interface{}, routingKey ...string) (err error) {
 	if exchangeName == "" {
 		return errors.New("交换机不能为空")
 	}
@@ -114,7 +114,7 @@ type DiffMsg struct {
 	RoutingKey   string
 }
 
-func (r *rabbitMQ) BatchSendToDiffExchangeTx(f func(data []*models.RabbitmqMsg) error, msgs []*DiffMsg) error {
+func (r *RabbitMQ) BatchSendToDiffExchangeTx(f func(data []*models.RabbitmqMsg) error, msgs []*DiffMsg) error {
 	var data []*models.RabbitmqMsg
 	for _, datum := range msgs {
 		if datum.ExchangeName == "" {
@@ -141,7 +141,7 @@ func (r *rabbitMQ) BatchSendToDiffExchangeTx(f func(data []*models.RabbitmqMsg) 
 }
 
 // 发送消息到指定队列，不是交换机
-func (r *rabbitMQ) SendToQueue(queueName QueueName, msg interface{}) error {
+func (r *RabbitMQ) SendToQueue(queueName QueueName, msg interface{}) error {
 	// 检查参数
 	if queueName == "" {
 		return errors.New("队列不能为空")
@@ -154,7 +154,7 @@ func (r *rabbitMQ) SendToQueue(queueName QueueName, msg interface{}) error {
 }
 
 // 发送消息到指定队列，不是交换机
-func (r *rabbitMQ) SendToQueueTx(f func(data *models.RabbitmqMsg) error, queueName QueueName, msg interface{}) error {
+func (r *RabbitMQ) SendToQueueTx(f func(data *models.RabbitmqMsg) error, queueName QueueName, msg interface{}) error {
 	// 检查参数
 	if queueName == "" {
 		return errors.New("队列不能为空")
@@ -177,7 +177,7 @@ func (r *rabbitMQ) SendToQueueTx(f func(data *models.RabbitmqMsg) error, queueNa
 }
 
 // 发送延迟消息到指定队列，不是交换机
-func (r *rabbitMQ) SendToQueueDelay(queueName QueueName, delay time.Duration, msg interface{}) error {
+func (r *RabbitMQ) SendToQueueDelay(queueName QueueName, delay time.Duration, msg interface{}) error {
 	// 检查参数
 	if queueName == "" {
 		return errors.New("队列不能为空")
@@ -209,7 +209,7 @@ func (r *rabbitMQ) SendToQueueDelay(queueName QueueName, delay time.Duration, ms
 }
 
 // 发送延迟消息到指定队列，不是交换机
-func (r *rabbitMQ) SendToQueueDelayTx(f func(data *models.RabbitmqMsg) error, queueName QueueName, delay time.Duration, msg interface{}) error {
+func (r *RabbitMQ) SendToQueueDelayTx(f func(data *models.RabbitmqMsg) error, queueName QueueName, delay time.Duration, msg interface{}) error {
 	// 检查参数
 	if queueName == "" {
 		return errors.New("队列不能为空")
@@ -250,7 +250,7 @@ func (r *rabbitMQ) SendToQueueDelayTx(f func(data *models.RabbitmqMsg) error, qu
 	return nil
 }
 
-func (r *rabbitMQ) convertMsg(msg interface{}) (data []byte, err error) {
+func (r *RabbitMQ) convertMsg(msg interface{}) (data []byte, err error) {
 	ref := reflect.TypeOf(msg)
 	for ref.Kind() == reflect.Ptr {
 		ref = ref.Elem()
@@ -274,7 +274,7 @@ func (r *rabbitMQ) convertMsg(msg interface{}) (data []byte, err error) {
 	return data, nil
 }
 
-func (r *rabbitMQ) checkMsgsType(msgs interface{}) (reflect.Kind, error) {
+func (r *RabbitMQ) checkMsgsType(msgs interface{}) (reflect.Kind, error) {
 	ref := reflect.TypeOf(msgs)
 	for ref.Kind() == reflect.Ptr {
 		ref = ref.Elem()
@@ -300,7 +300,7 @@ type sendReq struct {
 
 // 发送消息
 // 交换机和路由都为空，用队列名做路由发消息给队列
-func (r *rabbitMQ) send(req *sendReq) error {
+func (r *RabbitMQ) send(req *sendReq) error {
 	// 断言消息类型
 	body, err := r.convertMsg(req.Msg)
 	if err != nil {

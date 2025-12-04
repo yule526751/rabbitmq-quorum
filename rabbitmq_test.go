@@ -93,19 +93,22 @@ func TestSendTopicExchange(t *testing.T) {
 			ExchangeType: amqp091.ExchangeTopic,
 			BindQueues: map[QueueName]*Queue{
 				"order_create": {
-					RoutingKey: "order.create.#",
+					RoutingKeys: []RoutingKey{
+						"order.create.#",
+						"order.create.success",
+					},
 				},
 				"order_create_success": {
-					RoutingKey: "order.create.success",
+					RoutingKeys: []RoutingKey{"order.create.success"},
 				},
 				"order_create_offline_success": {
-					RoutingKey: "order.create.offline.success",
+					RoutingKeys: []RoutingKey{"order.create.offline.success"},
 				},
 				"order_create_offline_fail": {
-					RoutingKey: "order.create.offline.fail",
+					RoutingKeys: []RoutingKey{"order.create.offline.fail"},
 				},
 				"order_create_fail": {
-					RoutingKey: "order.create.fail",
+					RoutingKeys: []RoutingKey{"order.create.fail"},
 				},
 			},
 		},
@@ -182,10 +185,10 @@ func TestBatchSendToSameExchangeTx(t *testing.T) {
 			return nil
 		}, "test_exchange1", []*Queue{
 			{
-				RoutingKey: "123",
+				RoutingKeys: []RoutingKey{"123"},
 			},
 			{
-				RoutingKey: "456",
+				RoutingKeys: []RoutingKey{"456"},
 			},
 		})
 	})
@@ -223,7 +226,7 @@ func TestBatchSendToDiffExchangeTx(t *testing.T) {
 			msg:          map[string]interface{}{"id": 1},
 			ExchangeName: "test_exchange1",
 		}, {
-			msg:          Queue{RoutingKey: "123423"},
+			msg:          Queue{RoutingKeys: []RoutingKey{"123423"}},
 			ExchangeName: "test_exchange2",
 		}})
 	})
@@ -286,7 +289,7 @@ func TestConsumer(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func(m *rabbitMQ) {
+	defer func(m *RabbitMQ) {
 		_ = m.Close()
 	}(m)
 	t.Log("Conn success")
@@ -336,7 +339,7 @@ func TestMoreConsumer(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func(m *rabbitMQ) {
+	defer func(m *RabbitMQ) {
 		_ = m.Close()
 	}(m)
 	t.Log("Conn success")
@@ -382,7 +385,7 @@ func TestBingDelayQueue(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func(m *rabbitMQ) {
+	defer func(m *RabbitMQ) {
 		_ = m.Close()
 	}(m)
 	t.Log("Conn success")
@@ -429,7 +432,7 @@ func TestBingTopicDelayQueue(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func(m *rabbitMQ) {
+	defer func(m *RabbitMQ) {
 		_ = m.Close()
 	}(m)
 	t.Log("Conn success")
@@ -438,13 +441,13 @@ func TestBingTopicDelayQueue(t *testing.T) {
 			ExchangeType: amqp091.ExchangeTopic,
 			BindQueues: map[QueueName]*Queue{
 				"product_change": {
-					RoutingKey: "product.#",
+					RoutingKeys: []RoutingKey{"product.#"},
 				},
 				"product_add": {
-					RoutingKey: "product.add",
+					RoutingKeys: []RoutingKey{"product.add"},
 				},
 				"product_delete": {
-					RoutingKey: "product.delete",
+					RoutingKeys: []RoutingKey{"product.delete"},
 				},
 			},
 		},
@@ -452,16 +455,16 @@ func TestBingTopicDelayQueue(t *testing.T) {
 			ExchangeType: amqp091.ExchangeTopic,
 			BindQueues: map[QueueName]*Queue{
 				"inventory_change": {
-					RoutingKey: "inventory.#",
+					RoutingKeys: []RoutingKey{"inventory.#"},
 				},
 				"inventory_add": {
-					RoutingKey: "inventory.add",
+					RoutingKeys: []RoutingKey{"inventory.add"},
 				},
 				"inventory_add_new": {
-					RoutingKey: "inventory.add2",
+					RoutingKeys: []RoutingKey{"inventory.add2"},
 				},
 				"inventory_delete": {
-					RoutingKey: "inventory.delete",
+					RoutingKeys: []RoutingKey{"inventory.delete"},
 				},
 			},
 		},
@@ -487,7 +490,7 @@ func TestUnbindDelayQueueFromExchange(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func(m *rabbitMQ) {
+	defer func(m *RabbitMQ) {
 		_ = m.Close()
 	}(m)
 	t.Log("Conn success")
@@ -505,7 +508,7 @@ func TestSendToDelayQueue(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func(m *rabbitMQ) {
+	defer func(m *RabbitMQ) {
 		_ = m.Close()
 	}(m)
 	t.Log("Conn success")
@@ -524,7 +527,7 @@ func TestSendToQueue(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func(m *rabbitMQ) {
+	defer func(m *RabbitMQ) {
 		_ = m.Close()
 	}(m)
 	t.Log("Conn success")
@@ -540,7 +543,7 @@ func TestSendToQueueTx(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func(m *rabbitMQ) {
+	defer func(m *RabbitMQ) {
 		_ = m.Close()
 	}(m)
 	t.Log("Conn success")
@@ -562,7 +565,7 @@ func TestCirculateSendMsg(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer func(m *rabbitMQ) {
+	defer func(m *RabbitMQ) {
 		_ = m.Close()
 	}(m)
 	t.Log("Conn success")

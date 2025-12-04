@@ -17,7 +17,7 @@ type Consumer struct {
 	ConsumeFunc ConsumeFunc // 消费函数
 }
 
-func (r *rabbitMQ) RegisterConsumer(consumerName string, consumer *Consumer) error {
+func (r *RabbitMQ) RegisterConsumer(consumerName string, consumer *Consumer) error {
 	_, ok := r.consumes[consumerName]
 	if ok {
 		return errors.New(fmt.Sprintf("消费者 %s 已存在，注册失败", consumerName))
@@ -32,7 +32,7 @@ func (r *rabbitMQ) RegisterConsumer(consumerName string, consumer *Consumer) err
 	return r.consumerRun(consumerName, consumer)
 }
 
-func (r *rabbitMQ) consumerRun(consumerName string, consumer *Consumer) error {
+func (r *RabbitMQ) consumerRun(consumerName string, consumer *Consumer) error {
 	ch, err := r.conn.Channel()
 	if err != nil {
 		return errors.Wrap(err, fmt.Sprintf("%s获取信道失败", consumerName))
@@ -59,7 +59,7 @@ func (r *rabbitMQ) consumerRun(consumerName string, consumer *Consumer) error {
 }
 
 // handle 处理逻辑
-func (r *rabbitMQ) handle(ch *amqp.Channel, consumer *Consumer, msgChan <-chan amqp.Delivery) {
+func (r *RabbitMQ) handle(ch *amqp.Channel, consumer *Consumer, msgChan <-chan amqp.Delivery) {
 	for msg := range msgChan {
 		_, errStr := r.done(consumer.ConsumeFunc, msg.Body)
 		if errStr != "" {
@@ -123,7 +123,7 @@ func (r *rabbitMQ) handle(ch *amqp.Channel, consumer *Consumer, msgChan <-chan a
 	}
 }
 
-func (r *rabbitMQ) done(consumeFunc ConsumeFunc, msg []byte) (isPanic bool, errStr string) {
+func (r *RabbitMQ) done(consumeFunc ConsumeFunc, msg []byte) (isPanic bool, errStr string) {
 	var err error
 	defer func() {
 		if err := recover(); err != nil {
